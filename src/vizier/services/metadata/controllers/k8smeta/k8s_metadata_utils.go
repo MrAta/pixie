@@ -90,15 +90,19 @@ func podWatcher(resource string, namespaces []string, ch chan *K8sResourceMessag
 		iw.informers = append(iw.informers, inf)
 	}
 
+	var podList []v1.Pod
 	// We initialize ch with the current Pods to handle cold start race conditions.
-	list, err := clientset.CoreV1().Pods(v1.NamespaceAll).List(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		log.WithError(err).Errorf("Failed to init %s", resource)
-		// Still return the informer because the rest of the system can recover from this.
-		return iw
+	for _, ns := range namespaces {
+		list, err := clientset.CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{})
+		if err != nil {
+			log.WithError(err).Errorf("Failed to init %s in %s namespace.", resource, ns)
+			// Still return the informer because the rest of the system can recover from this.
+			return iw
+		}
+		podList = append(podList, list.Items...)
 	}
 
-	for _, obj := range list.Items {
+	for _, obj := range podList {
 		item := obj
 		msg := iw.convert(&item)
 		if msg != nil {
